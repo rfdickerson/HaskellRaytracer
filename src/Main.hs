@@ -2,7 +2,7 @@ module Main where
 
 import Data.List
 import qualified Data.Matrix as M
-import qualified Data.Vector as V 
+import qualified Data.Vector as V
 
 type RealNum = Float
 type Vector = M.Matrix RealNum
@@ -11,16 +11,17 @@ type Radius = RealNum
 type Transform = M.Matrix RealNum
 
 data Ray = Ray Point Vector
-data Geometry = Sphere Radius Point | Triangle 
+data Geometry = Sphere Radius Point | Triangle
 
 -- | Camera
--- World to camera transform, Clip hither, Clip yon, shutterOpen, shutterClose
-data Camera = Camera Transform RealNum RealNum RealNum RealNum
+-- Position, view direction, aspect ratio, up direction
+data Camera = Camera Point Vector RealNum Vector
+  deriving (Show)
 
 rayEpsilon :: RealNum
 rayEpsilon = 1e-7
 
-a = M.fromList 1 3 [1..3::Float]
+a = M.fromList 1 4 [1..4::Float]
 
 -- | Vector length (norm)
 vlength :: Vector -> RealNum
@@ -40,13 +41,39 @@ screenWidth = 800
 screenHeight :: RealNum
 screenHeight = 600
 
-samples = [M.fromList 1 2 [x, y] | x <- [0..screenWidth], y <- [0..screenHeight]]
+maxRaySteps :: Integer
+maxRaySteps = 5
+
+newPoint :: [RealNum] -> Point
+newPoint x = M.fromList 1 3 x
+
+defaultCamera = Camera (newPoint [5,0,0]) (newPoint [-1,0,0]) 1.0 (newPoint [0,1,0])
+
+cameraTransform :: Camera -> Transform
+cameraTransform c = identityTransform
+
+-- defaultCamera :: Camera
+-- defaultCamera = Camera identityTransform 0.1 100 0 0
+
+identityTransform :: Transform
+identityTransform = M.identity 4
+
+translateT :: Vector -> Transform
+translateT v = identityTransform + M.fromList 4 4 t
+  where
+    t = [0,0,0] ++ [M.getElem 1 1] ++ [0,0,0] ++ [M.getElem 1 2] ++ [0,0,0] ++ [M.getElem 1 3]
+
+samples = [M.fromList 1 4 [x, y, 0, 0] | x <- [0..screenWidth], y <- [0..screenHeight]]
 
 generateRay :: Camera -> Ray -> Ray
-generateRay (Camera t _ _ _ _) (Ray o r) = Ray o (t * r) 
+generateRay (Camera t _ _ _ ) (Ray o r) = Ray o (t * r)
 
 -- rayCast :: Ray -> Shape -> Bool
--- rayCast r (Sphere Radius Point) 
+-- rayCast r (Sphere Radius Point)
+
+saveImage :: String -> IO ()
+saveImage img = do
+   writeFile "image.pgm" img
 
 main :: IO ()
 main = do
@@ -65,5 +92,3 @@ main = do
 -- intersects :: Ray -> Shape -> Bool
 -- insersects (Circle Radius Point) =
 --  let e1 = p2 - p1
-
-
