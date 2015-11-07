@@ -44,10 +44,10 @@ screenHeight = 600
 maxRaySteps :: Integer
 maxRaySteps = 5
 
-newPoint :: [RealNum] -> Point
-newPoint x = M.fromList 1 3 x
+newVector :: [RealNum] -> Point
+newVector x = M.fromList 4 1 x
 
-defaultCamera = Camera (newPoint [5,0,0]) (newPoint [-1,0,0]) 1.0 (newPoint [0,1,0])
+defaultCamera = Camera (newVector [5,0,0]) (newVector [-1,0,0]) 1.0 (newVector [0,1,0])
 
 cameraTransform :: Camera -> Transform
 cameraTransform c = identityTransform
@@ -59,11 +59,11 @@ identityTransform :: Transform
 identityTransform = M.identity 4
 
 translateT :: Vector -> Transform
-translateT v = identityTransform + M.fromList 4 4 t
+translateT v = (M.fromList 4 4 t) + identityTransform
   where
-    t = [0,0,0] ++ [M.getElem 1 1] ++ [0,0,0] ++ [M.getElem 1 2] ++ [0,0,0] ++ [M.getElem 1 3]
+    t = [0,0,0] ++ [M.getElem 1 1 v] ++ [0,0,0] ++ [M.getElem 2 1 v] ++ [0,0,0] ++ [M.getElem 3 1 v] ++ [0,0,0,0]
 
-samples = [M.fromList 1 4 [x, y, 0, 0] | x <- [0..screenWidth], y <- [0..screenHeight]]
+samples = [M.fromList 4 1 [x, y, 0, 0] | x <- [0..screenWidth], y <- [0..screenHeight]]
 
 generateRay :: Camera -> Ray -> Ray
 generateRay (Camera t _ _ _ ) (Ray o r) = Ray o (t * r)
