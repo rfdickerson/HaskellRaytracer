@@ -3,7 +3,7 @@ module Main where
 import Data.List
 import Control.Concurrent
 import Control.Monad
-import Control.Concurrent.STM
+import Codec.Picture
 import qualified Data.Matrix as M
 import qualified Data.Vector as V
 
@@ -12,26 +12,26 @@ type Vector = M.Matrix RealNum
 type Point = Vector
 type Radius = RealNum
 type Transform = M.Matrix RealNum
-type Bitmap = [Pixel]
 
-
+-- | Ray Starting vector, Direction
 data Ray = Ray Point Vector deriving (Show, Eq)
-data Geometry = Sphere Radius Point | Triangle
+
+data Geometry = Sphere Radius Point
 
 -- | Pixel represents a color, r, g, b
-data Pixel = RGB Float Float Float deriving (Show, Eq)
-data Image = Image Int Int [Pixel] deriving Show
+-- data Pixel = RGB Float Float Float deriving (Show, Eq)
+
 
 -- | Camera
 -- World to camera, cameraToWorld, clipHither, clipYon
-data Camera = Camera Transform Transform RealNum RealNum
+data Camera = Camera RealNum RealNum
   deriving (Show)
 
 --pi :: RealNum
 --pi = 3.14159265359
 
 
-     
+
 rayEpsilon :: RealNum
 rayEpsilon = 1e-7
 
@@ -64,18 +64,25 @@ maxRaySteps = 5
 newVector :: [RealNum] -> Point
 newVector x = M.fromList 4 1 x
 
-defaultCamera = Camera (translateT $ newVector [5,0,0]) (translateT $ newVector [-5,0,0]) 0.010 100.0
+defaultCamera = Camera near far
+  where
+        near = 0.01
+        far = 100.0
 
+-- | builds a new vector in homogeneous coordinates
+buildVector x y z = M.fromList 4 1 [x,y,z,0]
+
+defaultSphere :: Geometry
+defaultSphere = Sphere 1.0 (buildVector (-5) 0 0)
+
+-- | cameraTranform builds a projection matrix (Camera to World) from a Camera
 cameraTransform :: Camera -> Transform
-cameraTransform (Camera w2c c2w hither yon) = M.fromList 4 4 [0,0,0,0,0,0,0,0,0,0,a,b,0,0,0,0] + identityTransform
+cameraTransform (Camera hither yon) = M.fromList 4 4 [0,0,0,0,0,0,0,0,0,0,a,b,0,0,0,0] + identityTransform
   where a = yon / (yon-hither)
         b = -(yon*hither/(yon-hither))
 
 invTanAng :: RealNum -> RealNum
 invTanAng fov = 1.0/tan(toRadians(fov) / 2.0)
-
--- defaultCamera :: Camera
--- defaultCamera = Camera identityTransform 0.1 100 0 0
 
 identityTransform :: Transform
 identityTransform = M.identity 4
@@ -91,35 +98,58 @@ translateT :: Vector -> Transform
 translateT v = identityTransform + (M.fromList 4 4 t)
   where
     t = [0,0,0] ++ [M.getElem 1 1 v]
-      ++ [0,0,0] ++ [M.getElem 1 2 v]
-      ++ [0,0,0] ++ [M.getElem 1 3 v]
+      ++ [0,0,0] ++ [M.getElem 2 1 v]
+      ++ [0,0,0] ++ [M.getElem 3 1 v]
 
-samples = [M.fromList 4 1 [x, y, 0, 0] | x <- [0..screenWidth], y <- [0..screenHeight]]
+-- samples = [M.fromList 4 1 [x, y, 0, 0] | x <- [0..screenWidth], y <- [0..screenHeight]]
+squareVector :: Vector -> RealNum
+squareVector v = M.getElem 1 1 (M.transpose a * a)
 
-generateRay :: Camera -> Ray -> Ray
-generateRay (Camera t _ _ _ ) (Ray o r) = Ray o (t * r)
+
+quadratic :: RealNum -> RealNum -> RealNum -> RealNum
+quadratic a b c =
+  b**2 - 4*a*c
+
+intersects :: Ray -> Geometry -> Bool
+intersects (Ray o v) (Sphere radius sposition) =
+  if discriminant >= 0 then
+    True
+  else
+    False
+  where
+    discriminant = quadratic a b c
+    a = squareVector v
+    b = 2 * dot v sposition
+    c = squareVector sposition - radius * 2
+
+
+rayTrace :: Int -> Int -> PixelRGB8
+rayTrace x y =
+  case intersects r defaultSphere of
+    True -> PixelRGB8 0 0 128
+    False -> PixelRGB8 33 33 33
+  where
+    r = generateRay x y defaultCamera
+
+
+generateRay :: Int -> Int -> Camera -> Ray
+generateRay x y c = Ray origin direction
+  where
+    origin = buildVector 0 0 0
+    direction = (cameraTransform c) * (buildVector fx fy 0.0)
+    fx = fromIntegral x
+    fy = fromIntegral y
+
 
 -- rayCast :: Ray -> Shape -> Bool
 -- rayCast r (Sphere Radius Point)
 
-raster :: Image -> String
-raster (Image width height bitmap) = join "\n" line_list
-                                     where line_list = ["PS3", show width ++ " " ++ show height,
-                                                        "255", map (join " " . map show) bitmap]
-
-saveImage :: Image -> IO ()
-saveImage img = do
-   writeFile "image.pgm" (raster img)
-
-sayHi :: IO ()
-sayHi = do
-  putStrLn "Hi!!"
-
 main :: IO ()
 main =
-  putStrLn "Hello"
+  writePng "image.png" $ generateImage rayTrace 250 300
+    -- where pixelRenderer x y = PixelRGB8 (fromIntegral x) (fromIntegral y) 128
 
---dot (Vector x1 y1 z1) (Vector x2 y2 z2) = x1*x2 + y1*y2 + z1*z2
+-- dot (Vector x1 y1 z1) (Vector x2 y2 z2) = x1*x2 + y1*y2 + z1*z2
 
 --cross :: Vector -> Vector -> Vector
 --cross (Vector x1 y1 z1) (Vector x2 y2 z2) = Vector x y z
