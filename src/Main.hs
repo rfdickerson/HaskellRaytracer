@@ -88,9 +88,11 @@ scaleT v = M.fromList 4 4 [x,0,0,0,0,y,0,0,0,0,z,0,0,0,0,1]
              z = M.getElem 3 1 v
 
 translateT :: Vector -> Transform
-translateT v = (M.fromList 4 4 t) + identityTransform
+translateT v = identityTransform + (M.fromList 4 4 t)
   where
-    t = [0,0,0] ++ [M.getElem 1 1 v] ++ [0,0,0] ++ [M.getElem 2 1 v] ++ [0,0,0] ++ [M.getElem 3 1 v] ++ [0,0,0,0]
+    t = [0,0,0] ++ [M.getElem 1 1 v]
+      ++ [0,0,0] ++ [M.getElem 1 2 v]
+      ++ [0,0,0] ++ [M.getElem 1 3 v]
 
 samples = [M.fromList 4 1 [x, y, 0, 0] | x <- [0..screenWidth], y <- [0..screenHeight]]
 
@@ -114,15 +116,8 @@ sayHi = do
   putStrLn "Hi!!"
 
 main :: IO ()
-main = do
-  shared <- atomically $ newTVar 0
-  a <- forkIO $ sayHi 
-  b <- forkIO $ sayHi
-  dispVar shared
-  return ()
-
-atomRead = atomically . readTVar
-dispVar x = atomRead x >>= print
+main =
+  putStrLn "Hello"
 
 --dot (Vector x1 y1 z1) (Vector x2 y2 z2) = x1*x2 + y1*y2 + z1*z2
 
