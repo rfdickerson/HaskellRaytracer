@@ -24,6 +24,8 @@ data Geometry = Sphere Radius Point
 data Camera = Camera Transform Double Double
   deriving (Show)
 
+defaultCamera = Camera (unit 4) 0.01 100.0
+
 rayEpsilon :: Double
 rayEpsilon = 1e-7
 
@@ -34,7 +36,7 @@ toRadians deg = deg * pi / 180.0
 vlength :: Vector -> Double
 vlength v = sqrt sumsquares
             where
-              sumsquares = foldl (\x y -> x**2 + y) 0 (col 1 v) 
+              sumsquares = foldr (\x y -> x**2 + y) 0 (col 1 v) 
 
 -- | Dot product of vectors
 dot :: Vector -> Vector -> Double
@@ -51,10 +53,11 @@ maxRaySteps = 5
 
               
 -- | builds a new vector in homogeneous coordinates
-buildVector x y z = transpose $ fromList [[x,y,z,1]]
+buildVector :: Double -> Double -> Double -> Matrix Double
+buildVector x y z = transpose (fromList [[x,y,z,1]])
 
 defaultSphere :: Geometry
-defaultSphere = Sphere 3.0 (buildVector 10 0 0)
+defaultSphere = Sphere 3.0 (buildVector 10.0 0 0)
 
 -- | cameraTranform builds a projection matrix (Camera to World) from a Camera
 perspective :: Double -> Double -> Double -> Transform
@@ -82,18 +85,21 @@ invTanAng fov = 1.0 / tan(toRadians fov  / 2.0)
 identityTransform :: Transform
 identityTransform = unit 4
 
--- normalize :: Vector -> Vector
--- normalize v = M.fromList 4 1 [x/l, y/l, z/l, 1]
---   where
---   x = M.getElem 1 1 v
---   y = M.getElem 2 1 v
---   z = M.getElem 3 1 v
---   w = M.getElem 4 1 v
---   l = sqrt (x**2 + y**2 + z**2 + w**2)
+normalize :: Vector -> Vector
+normalize v = Numeric.Matrix.map (\x -> x/l) v
+    where
+      l = vlength v
+
+vectorMultiply :: Transform -> Vector -> Vector
+vectorMultiply m v = transpose (m * transpose v)
 
 
 scaleT :: Vector -> Transform
 scaleT v = diag (col 1 v)
+
+a = buildVector 3.0 4.0 5.0
+
+myscale = scaleT (buildVector 5.0 10.0 15.0)
 
 -- translateT :: Vector -> Transform
 -- translateT v = m + identityTransform
@@ -113,53 +119,54 @@ scaleT v = diag (col 1 v)
 -- squareVector :: Vector -> RealNum
 -- squareVector v = M.getElem 1 1 (M.transpose a * a)
 
--- quadratic :: RealNum -> RealNum -> RealNum -> RealNum
--- quadratic a b c =
---   b**2 - 4*a*c
+quadratic :: Double -> Double -> Double -> Double
+quadratic a b c =
+  b**2 - 4*a*c
+
+-- | Determines a ray geometry intersection
+intersects :: Ray -> Geometry -> Bool
+intersects (Ray o v) (Sphere radius p) =
+  discriminant >= 0
+  where
+    discriminant = quadratic a b c
+    a = dot v v
+    b = 2 * dot os v
+    c = dot os os - radius * 2
+    os = p - o
+
+distance :: Ray -> Geometry -> Double
+distance (Ray o v) (Sphere radius p)
+  = (-b + sqrt discriminant) / (2*a)
+  where
+    discriminant = quadratic a b c
+    a = dot v v
+    b = 2 * dot os v
+    c = dot os os - radius ** 2
+    os = p - o
+
+rayTrace :: Int -> Int -> PixelRGB8
+rayTrace x y =
+  if intersects r defaultSphere then
+    PixelRGB8 (round (5*d)) 128 0
+  else
+    blackPixel
+  where
+    r = generateRay x y defaultCamera
+    d = distance r defaultSphere
+
+generateRay :: Int -> Int -> Camera -> Ray
+generateRay x y c = Ray origin direction
+  where
+    origin = buildVector 0 0 0
+    direction = normalize $ vectorMultiply perspTransform rasterCoords
+    --ndx = 2*(fromIntegral x / fromIntegral screenWidth) - 1
+    --ndy = 2*(fromIntegral y / fromIntegral screenHeight) - 1
+    perspTransform = perspective 55.0 0.1 50.0
+    rasterCoords = buildVector ndx ndy 0.0
+    ndx = (fromIntegral x / fromIntegral screenWidth)
+    ndy = (fromIntegral y / fromIntegral screenHeight)
 
 
-
--- intersects :: Ray -> Geometry -> Bool
--- intersects (Ray o v) (Sphere radius p) =
---   discriminant >= 0
---   where
---     discriminant = quadratic a b c
---     a = dot v v
---     b = 2 * dot os v
---     c = dot os os - radius * 2
---     os = p - o
-
--- distance :: Ray -> Geometry -> RealNum
--- distance (Ray o v) (Sphere radius p)
---   = (-b + sqrt discriminant) / (2*a)
---   where
---     discriminant = quadratic a b c
---     a = dot v v
---     b = 2 * dot os v
---     c = dot os os - radius ** 2
---     os = p - o
-
--- rayTrace :: Int -> Int -> PixelRGB8
--- rayTrace x y =
---   if intersects r defaultSphere then
---     PixelRGB8 (round (5*d)) 128 0
---   else
---     blackPixel
---   where
---     r = generateRay x y defaultCamera
---     d = distance r defaultSphere
-
--- generateRay :: Int -> Int -> Camera -> Ray
--- generateRay x y c = Ray origin direction
---   where
---     origin = buildVector 0 0 0
---     direction = normalize $ perspective 55.0 0.1 50.0  * buildVector ndx ndy 0
---     --ndx = 2*(fromIntegral x / fromIntegral screenWidth) - 1
---     --ndy = 2*(fromIntegral y / fromIntegral screenHeight) - 1
---     ndx = (fromIntegral x / fromIntegral screenWidth)
---     ndy = (fromIntegral y / fromIntegral screenHeight)
-
-
--- main :: IO ()
--- main =
---   writePng "image.png" ( generateImage rayTrace screenWidth screenHeight)
+main :: IO ()
+main =
+  writePng "image.png" ( generateImage rayTrace screenWidth screenHeight)
