@@ -1,3 +1,5 @@
+{-# LANGUAGE Haskell2010, TemplateHaskell, QuasiQuotes #-}
+
 module Main where
 
 -- import Data.List
@@ -54,7 +56,7 @@ maxRaySteps = 5
               
 -- | builds a new vector in homogeneous coordinates
 buildVector :: Double -> Double -> Double -> Matrix Double
-buildVector x y z = transpose (fromList [[x,y,z,1]])
+buildVector x y z = (fromList [[x],[y],[z],[1]])
 
 defaultSphere :: Geometry
 defaultSphere = Sphere 3.0 (buildVector 10.0 0 0)
@@ -158,7 +160,7 @@ generateRay :: Int -> Int -> Camera -> Ray
 generateRay x y c = Ray origin direction
   where
     origin = buildVector 0 0 0
-    direction = normalize $ vectorMultiply perspTransform rasterCoords
+    direction = normalize $ perspTransform * rasterCoords
     --ndx = 2*(fromIntegral x / fromIntegral screenWidth) - 1
     --ndy = 2*(fromIntegral y / fromIntegral screenHeight) - 1
     perspTransform = perspective 55.0 0.1 50.0
