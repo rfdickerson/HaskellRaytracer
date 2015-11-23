@@ -7,7 +7,7 @@ import Control.Concurrent
 import Control.Monad
 import Codec.Picture
 
-import Numeric.Matrix
+-- import Numeric.Matrix
 
 data Matrix4 = Matrix4
                Double Double Double Double
@@ -60,16 +60,33 @@ unit4 = Matrix4 1 0 0 0
         0 0 1 0
         0 0 0 1
 
-type Vector = Matrix Double
-type Point = Vector
+vlength4 :: Vector4 -> Double
+vlength4 (Vector4 x y z w) = sqrt(x**2 + y**2 + z**2 + w**2)
+
+dot4 :: Vector4 -> Vector4 -> Double
+dot4 (Vector4 x1 y1 z1 w1) (Vector4 x2 y2 z2 w2) =
+  x1*x2 + y1*y2 + z1*z2 + w1*w2
+
+normalize4 :: Vector4 -> Vector4
+normalize4 v@(Vector4 x y z w) =
+  Vector4 (x*s) (y*s) (z*s) (w*s)
+  where
+    s = 1/vlength4 v 
+
+subVec4 :: Vector4 -> Vector4 -> Vector4
+subVec4 (Vector4 x1 y1 z1 w1) (Vector4 x2 y2 z2 w2)
+  = Vector4 (x1-x2) (y1-y2) (z1-z2) (w1-w2)
+
+-- type Vector = Matrix Double
+type Point = Vector4
 type Radius = Double
-type Transform = Matrix Double
+type Transform = Matrix4
 
 yellowPixel = PixelRGB8 255 215 0
 blackPixel = PixelRGB8 33 33 33
 
 -- | Ray Starting vector, Direction
-data Ray = Ray Point Vector deriving (Show, Eq)
+data Ray = Ray Point Vector4 deriving (Show, Eq)
 
 data Geometry = Sphere Radius Point
 
@@ -78,7 +95,7 @@ data Geometry = Sphere Radius Point
 data Camera = Camera Transform Double Double
             deriving (Show)
 
-defaultCamera = Camera (unit 4) 0.01 100.0
+defaultCamera = Camera (unit4) 0.01 100.0
 
 rayEpsilon :: Double
 rayEpsilon = 1e-7
@@ -86,15 +103,15 @@ rayEpsilon = 1e-7
 toRadians :: Double -> Double
 toRadians deg = deg * pi / 180.0
 
--- | Vector length (norm)
-vlength :: Vector -> Double
-vlength v = sqrt sumsquares
-  where
-    sumsquares = foldr (\x y -> x**2 + y) 0 (col 1 v) 
+-- -- | Vector length (norm)
+-- vlength :: Vector -> Double
+-- vlength v = sqrt sumsquares
+--   where
+--     sumsquares = foldr (\x y -> x**2 + y) 0 (col 1 v) 
 
--- | Dot product of vectors
-dot :: Vector -> Vector -> Double
-dot v1 v2 = sum $ zipWith (*) (col 1 v1) (col 1 v2)
+-- -- | Dot product of vectors
+-- dot :: Vector -> Vector -> Double
+-- dot v1 v2 = sum $ zipWith (*) (col 1 v1) (col 1 v2)
 
 screenWidth :: Int
 screenWidth = 200
@@ -106,31 +123,29 @@ maxRaySteps :: Integer
 maxRaySteps = 5
 
               
--- | builds a new vector in homogeneous coordinates
-buildVector :: Double -> Double -> Double -> Matrix Double
-buildVector x y z = (fromList [[x],[y],[z],[1]])
+-- -- | builds a new vector in homogeneous coordinates
+-- buildVector :: Double -> Double -> Double -> Matrix Double
+-- buildVector x y z = (fromList [[x],[y],[z],[1]])
 
 defaultSphere :: Geometry
-defaultSphere = Sphere 3.0 (buildVector 10.0 0 0)
+defaultSphere = Sphere 0.2 (Vector4 5.0 0 0 1.0)
 
 -- | cameraTranform builds a projection matrix (Camera to World) from a Camera
 perspective :: Double -> Double -> Double -> Transform
-perspective fov n f = perspectMatrix * eyeCoordScale fov
+perspective fov n f = multMat4 m (eyeCoordScale fov)
   where
-    perspectMatrix = m
-    m = fromList [[1,0,0,0],
-                  [0,1,0,0],
-                  [0,0,a,b],
-                  [0,0,1,0]]
+    m = Matrix4 1 0 0 0
+                0 1 0 0
+                0 0 a b
+                0 0 1 0
     a = f*invDenom
     b = (-f)*n*invDenom
     invDenom = 1.0/(f-n)
 
 -- | Scales to canonical viewing volume
 eyeCoordScale :: Double -> Transform
-eyeCoordScale fov = scaleT v
+eyeCoordScale fov = scaleT i i 1
   where
-    v = buildVector i i 1
     i = invTanAng fov
 
 invTanAng :: Double -> Double
@@ -138,23 +153,27 @@ invTanAng fov = 1.0 / tan(toRadians fov  / 2.0)
 
 
 identityTransform :: Transform
-identityTransform = unit 4
+identityTransform = unit4
 
-normalize :: Vector -> Vector
-normalize v = Numeric.Matrix.map (\x -> x/l) v
-  where
-    l = vlength v
+-- normalize :: Vector -> Vector
+-- normalize v = Numeric.Matrix.map (\x -> x/l) v
+--   where
+--     l = vlength v
 
-vectorMultiply :: Transform -> Vector -> Vector
-vectorMultiply m v = transpose (m * transpose v)
+-- vectorMultiply :: Transform -> Vector -> Vector
+-- vectorMultiply m v = transpose (m * transpose v)
 
 
-scaleT :: Vector -> Transform
-scaleT v = diag (col 1 v)
+scaleT :: Double -> Double -> Double -> Transform
+scaleT x y z = Matrix4 x 0 0 0
+               0 y 0 0
+               0 0 z 0
+               0 0 0 1
 
-a = buildVector 3.0 4.0 5.0
+a = Vector4 1.0 4.0 5.0 1.0
 
-myscale = scaleT (buildVector 5.0 10.0 15.0)
+myscale = scaleT 5.0 10.0 15.0
+
 
 -- translateT :: Vector -> Transform
 -- translateT v = m
@@ -178,25 +197,25 @@ intersects (Ray o v) (Sphere radius p) =
   discriminant >= 0
   where
     discriminant = quadratic a b c
-    a = dot v v
-    b = 2 * dot os v
-    c = dot os os - radius * 2
-    os = p - o
+    a = dot4 v v
+    b = 2 * dot4 os v
+    c = dot4 os os - radius * 2
+    os = subVec4 p o
 
 distance :: Ray -> Geometry -> Double
 distance (Ray o v) (Sphere radius p)
   = (-b + sqrt discriminant) / (2*a)
   where
     discriminant = quadratic a b c
-    a = dot v v
-    b = 2 * dot os v
-    c = dot os os - radius ** 2
-    os = p - o
+    a = dot4 v v
+    b = 2 * dot4 os v
+    c = dot4 os os - radius ** 2
+    os = subVec4 p o
 
 rayTrace :: Int -> Int -> PixelRGB8
 rayTrace x y =
   if intersects r defaultSphere then
-    PixelRGB8 (round (5*d)) 128 0
+    PixelRGB8 (round (10*d)) 128 0
   else
     blackPixel
   where
@@ -207,12 +226,12 @@ rayTrace x y =
 generateRay :: Int -> Int -> Camera -> Ray
 generateRay x y c = Ray origin direction
   where
-    origin = buildVector 0 0 0
-    direction = normalize $ perspTransform * rasterCoords
+    origin = Vector4 (0) (-2) 0 1
+    direction = normalize4 ( vectorMult4 perspTransform rasterCoords )
     --ndx = 2*(fromIntegral x / fromIntegral screenWidth) - 1
     --ndy = 2*(fromIntegral y / fromIntegral screenHeight) - 1
-    perspTransform = perspective 55.0 0.1 50.0
-    rasterCoords = buildVector ndx ndy 0.0
+    perspTransform = perspective 55.0 0.01 100.0
+    rasterCoords = Vector4 ndx ndy 0.1 1.0
     ndx = (fromIntegral x / fromIntegral screenWidth)
     ndy = (fromIntegral y / fromIntegral screenHeight)
 
