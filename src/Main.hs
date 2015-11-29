@@ -52,13 +52,13 @@ vectorMult4 (Matrix4 m00 m01 m02 m03 m10 m11 m12 m13 m20 m21 m22 m23 m30 m31 m32
     b = m10 * x + m11 * y + m12 * z + m13 * w
     c = m20 * x + m21 * y + m22 * z + m23 * w
     d = m30 * x + m31 * y + m32 * z + m33 * w
-               
+
 
 unit4 :: Matrix4
 unit4 = Matrix4 1 0 0 0
-        0 1 0 0
-        0 0 1 0
-        0 0 0 1
+                0 1 0 0
+                0 0 1 0
+                0 0 0 1
 
 vlength4 :: Vector4 -> Double
 vlength4 (Vector4 x y z w) = sqrt(x**2 + y**2 + z**2 + w**2)
@@ -71,7 +71,7 @@ normalize4 :: Vector4 -> Vector4
 normalize4 v@(Vector4 x y z w) =
   Vector4 (x*s) (y*s) (z*s) (w*s)
   where
-    s = 1/vlength4 v 
+    s = 1/vlength4 v
 
 subVec4 :: Vector4 -> Vector4 -> Vector4
 subVec4 (Vector4 x1 y1 z1 w1) (Vector4 x2 y2 z2 w2)
@@ -107,28 +107,28 @@ toRadians deg = deg * pi / 180.0
 -- vlength :: Vector -> Double
 -- vlength v = sqrt sumsquares
 --   where
---     sumsquares = foldr (\x y -> x**2 + y) 0 (col 1 v) 
+--     sumsquares = foldr (\x y -> x**2 + y) 0 (col 1 v)
 
 -- -- | Dot product of vectors
 -- dot :: Vector -> Vector -> Double
 -- dot v1 v2 = sum $ zipWith (*) (col 1 v1) (col 1 v2)
 
 screenWidth :: Int
-screenWidth = 200
+screenWidth = 800
 
 screenHeight :: Int
-screenHeight = 150
+screenHeight = 600
 
 maxRaySteps :: Integer
 maxRaySteps = 5
 
-              
+
 -- -- | builds a new vector in homogeneous coordinates
 -- buildVector :: Double -> Double -> Double -> Matrix Double
 -- buildVector x y z = (fromList [[x],[y],[z],[1]])
 
 defaultSphere :: Geometry
-defaultSphere = Sphere 0.2 (Vector4 5.0 0 0 1.0)
+defaultSphere = Sphere 0.4 (Vector4 2.0 (2.0) 0 1.0)
 
 -- | cameraTranform builds a projection matrix (Camera to World) from a Camera
 perspective :: Double -> Double -> Double -> Transform
@@ -166,14 +166,20 @@ identityTransform = unit4
 
 scaleT :: Double -> Double -> Double -> Transform
 scaleT x y z = Matrix4 x 0 0 0
-               0 y 0 0
-               0 0 z 0
-               0 0 0 1
+                       0 y 0 0
+                       0 0 z 0
+                       0 0 0 1
 
 a = Vector4 1.0 4.0 5.0 1.0
 
 myscale = scaleT 5.0 10.0 15.0
 
+
+translateT :: Double -> Double -> Double -> Transform
+translateT x y z = Matrix4 1 0 0 x
+                           0 1 0 y
+                           0 0 1 z
+                           0 0 0 1
 
 -- translateT :: Vector -> Transform
 -- translateT v = m
@@ -187,8 +193,8 @@ myscale = scaleT 5.0 10.0 15.0
 --   z = at v (3, 1)
 
 
-quadratic :: Double -> Double -> Double -> Double
-quadratic a b c =
+discrim :: Double -> Double -> Double -> Double
+discrim a b c =
   b**2 - 4*a*c
 
 -- | Determines a ray geometry intersection
@@ -196,26 +202,27 @@ intersects :: Ray -> Geometry -> Bool
 intersects (Ray o v) (Sphere radius p) =
   discriminant >= 0
   where
-    discriminant = quadratic a b c
+    discriminant = discrim a b c
     a = dot4 v v
     b = 2 * dot4 os v
-    c = dot4 os os - radius * 2
+    c = dot4 os os - (radius ** 2)
     os = subVec4 p o
 
 distance :: Ray -> Geometry -> Double
 distance (Ray o v) (Sphere radius p)
-  = (-b + sqrt discriminant) / (2*a)
+  = (-b - sqrt discriminant) / (2*a)
   where
-    discriminant = quadratic a b c
+    discriminant = discrim a b c
     a = dot4 v v
     b = 2 * dot4 os v
     c = dot4 os os - radius ** 2
     os = subVec4 p o
 
+-- | raytrace converts a raster coordinate and returns a pixel color
 rayTrace :: Int -> Int -> PixelRGB8
 rayTrace x y =
   if intersects r defaultSphere then
-    PixelRGB8 (round (10*d)) 128 0
+    PixelRGB8 (round (0.2*d)) 128 0
   else
     blackPixel
   where
@@ -226,16 +233,14 @@ rayTrace x y =
 generateRay :: Int -> Int -> Camera -> Ray
 generateRay x y c = Ray origin direction
   where
-    origin = Vector4 (0) (-2) 0 1
+    origin = Vector4 0 0 0 1
     direction = normalize4 ( vectorMult4 perspTransform rasterCoords )
-    --ndx = 2*(fromIntegral x / fromIntegral screenWidth) - 1
-    --ndy = 2*(fromIntegral y / fromIntegral screenHeight) - 1
-    perspTransform = perspective 55.0 0.01 100.0
-    rasterCoords = Vector4 ndx ndy 0.1 1.0
-    ndx = (fromIntegral x / fromIntegral screenWidth)
-    ndy = (fromIntegral y / fromIntegral screenHeight)
+    perspTransform = perspective 55.0 0.1 20.0
+    rasterCoords = Vector4 ndx ndy 0.0 1.0
+    ndx = fromIntegral x / fromIntegral screenWidth
+    ndy = fromIntegral y / fromIntegral screenHeight
 
-
+-- | rasterizes the image to a file
 main :: IO ()
 main =
   writePng "image.png" ( generateImage rayTrace screenWidth screenHeight)
