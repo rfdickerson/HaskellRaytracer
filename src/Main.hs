@@ -39,19 +39,18 @@ multMat4 (Matrix4 m00 m01 m02 m03 m10 m11 m12 m13 m20 m21 m22 m23 m30 m31 m32 m3
       j32 = m30*n02 + m31*n12 + m32*n22 + m33*n32
       j33 = m30*n03 + m31*n13 + m32*n23 + m33*n33
 
-data Vector4 = Vector4
-               Double Double Double Double
+data Vector3 = Vector3 Double Double Double
                deriving (Show, Eq)
 
-vectorMult4 :: Matrix4 -> Vector4 -> Vector4
-vectorMult4 (Matrix4 m00 m01 m02 m03 m10 m11 m12 m13 m20 m21 m22 m23 m30 m31 m32 m33)
-  (Vector4 x y z w) =
-  Vector4 a b c d
+vectorMult :: Matrix4 -> Vector3 -> Vector3
+vectorMult (Matrix4 m00 m01 m02 m03 m10 m11 m12 m13 m20 m21 m22 m23 m30 m31 m32 m33)
+  (Vector3 x y z) =
+  Vector3 (xp/wp) (yp/wp) (zp/wp)
   where
-    a = m00 * x + m01 * y + m02 * z + m03 * w
-    b = m10 * x + m11 * y + m12 * z + m13 * w
-    c = m20 * x + m21 * y + m22 * z + m23 * w
-    d = m30 * x + m31 * y + m32 * z + m33 * w
+    xp = m00 * x + m01 * y + m02 * z + m03
+    yp = m10 * x + m11 * y + m12 * z + m13
+    zp = m20 * x + m21 * y + m22 * z + m23
+    wp = m30 * x + m31 * y + m32 * z + m33
 
 
 unit4 :: Matrix4
@@ -60,25 +59,25 @@ unit4 = Matrix4 1 0 0 0
                 0 0 1 0
                 0 0 0 1
 
-vlength4 :: Vector4 -> Double
-vlength4 (Vector4 x y z w) = sqrt(x**2 + y**2 + z**2 + w**2)
+vlength3 :: Vector3 -> Double
+vlength3 (Vector3 x y z) = sqrt(x*x + y*y + z*z)
 
-dot4 :: Vector4 -> Vector4 -> Double
-dot4 (Vector4 x1 y1 z1 w1) (Vector4 x2 y2 z2 w2) =
-  x1*x2 + y1*y2 + z1*z2 + w1*w2
+dot3 :: Vector3 -> Vector3 -> Double
+dot3 (Vector3 x1 y1 z1) (Vector3 x2 y2 z2) =
+  x1*x2 + y1*y2 + z1*z2
 
-normalize4 :: Vector4 -> Vector4
-normalize4 v@(Vector4 x y z w) =
-  Vector4 (x*s) (y*s) (z*s) (w*s)
+normalize3 :: Vector3 -> Vector3
+normalize3 v@(Vector3 x y z) =
+  Vector3 (x*s) (y*s) (z*s)
   where
-    s = 1/vlength4 v
+    s = 1/vlength3 v
 
-subVec4 :: Vector4 -> Vector4 -> Vector4
-subVec4 (Vector4 x1 y1 z1 w1) (Vector4 x2 y2 z2 w2)
-  = Vector4 (x1-x2) (y1-y2) (z1-z2) (w1-w2)
+subVec3 :: Vector3 -> Vector3 -> Vector3
+subVec3 (Vector3 x1 y1 z1) (Vector3 x2 y2 z2)
+  = Vector3 (x1-x2) (y1-y2) (z1-z2)
 
 -- type Vector = Matrix Double
-type Point = Vector4
+type Point = Vector3
 type Radius = Double
 type Transform = Matrix4
 
@@ -86,7 +85,7 @@ yellowPixel = PixelRGB8 255 215 0
 blackPixel = PixelRGB8 33 33 33
 
 -- | Ray Starting vector, Direction
-data Ray = Ray Point Vector4 deriving (Show, Eq)
+data Ray = Ray Point Vector3 deriving (Show, Eq)
 
 data Geometry = Sphere Radius Point
 
@@ -114,10 +113,10 @@ toRadians deg = deg * pi / 180.0
 -- dot v1 v2 = sum $ zipWith (*) (col 1 v1) (col 1 v2)
 
 screenWidth :: Int
-screenWidth = 800
+screenWidth = 1280
 
 screenHeight :: Int
-screenHeight = 600
+screenHeight = 900
 
 maxRaySteps :: Integer
 maxRaySteps = 5
@@ -128,7 +127,7 @@ maxRaySteps = 5
 -- buildVector x y z = (fromList [[x],[y],[z],[1]])
 
 defaultSphere :: Geometry
-defaultSphere = Sphere 0.4 (Vector4 2.0 (2.0) 0 1.0)
+defaultSphere = Sphere 1.4 (Vector3 3.0 0.0 0.0)
 
 -- | cameraTranform builds a projection matrix (Camera to World) from a Camera
 perspective :: Double -> Double -> Double -> Transform
@@ -170,7 +169,7 @@ scaleT x y z = Matrix4 x 0 0 0
                        0 0 z 0
                        0 0 0 1
 
-a = Vector4 1.0 4.0 5.0 1.0
+a = Vector3 1.0 4.0 5.0
 
 myscale = scaleT 5.0 10.0 15.0
 
@@ -203,20 +202,20 @@ intersects (Ray o v) (Sphere radius p) =
   discriminant >= 0
   where
     discriminant = discrim a b c
-    a = dot4 v v
-    b = 2 * dot4 os v
-    c = dot4 os os - (radius ** 2)
-    os = subVec4 p o
+    a = dot3 v v
+    b = 2 * dot3 os v
+    c = dot3 os os - (radius * radius)
+    os = subVec3 p o
 
 distance :: Ray -> Geometry -> Double
 distance (Ray o v) (Sphere radius p)
-  = (-b - sqrt discriminant) / (2*a)
+  = (-b + sqrt discriminant) / (2*a)
   where
     discriminant = discrim a b c
-    a = dot4 v v
-    b = 2 * dot4 os v
-    c = dot4 os os - radius ** 2
-    os = subVec4 p o
+    a = dot3 v v
+    b = 2 * dot3 os v
+    c = dot3 os os - radius ** 2
+    os = subVec3 p o
 
 -- | raytrace converts a raster coordinate and returns a pixel color
 rayTrace :: Int -> Int -> PixelRGB8
@@ -233,10 +232,10 @@ rayTrace x y =
 generateRay :: Int -> Int -> Camera -> Ray
 generateRay x y c = Ray origin direction
   where
-    origin = Vector4 0 0 0 1
-    direction = normalize4 ( vectorMult4 perspTransform rasterCoords )
-    perspTransform = perspective 55.0 0.1 20.0
-    rasterCoords = Vector4 ndx ndy 0.0 1.0
+    origin = Vector3 0 0 0
+    direction = normalize3 ( vectorMult perspTransform rasterCoords )
+    perspTransform = perspective 55.0 1.1 100.0
+    rasterCoords = Vector3 ndx ndy 1.0
     ndx = fromIntegral x / fromIntegral screenWidth
     ndy = fromIntegral y / fromIntegral screenHeight
 
